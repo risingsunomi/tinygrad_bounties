@@ -67,7 +67,6 @@ def helper_test_generic_square(name, N, f1, f2, onearg=False):
   torch_a = (torch.rand(N, N, dtype=torch_dt) - 0.5).to(torch_device)
   torch_b = (torch.rand(N, N, dtype=torch_dt) - 0.5).to(torch_device) if not onearg else None
 
-  Tensor.manual_seed(0)
   tiny_a = Tensor(torch_a.cpu().numpy())
   tiny_b = Tensor(torch_b.cpu().numpy()) if not onearg else None
 
