@@ -1,5 +1,6 @@
 from typing import cast
 import math, struct, sys
+import math, struct, sys
 from tinygrad.renderer import Renderer
 from tinygrad.renderer.cstyle import ClangRenderer
 from tinygrad.ops import UOp, PatternMatcher, UPat, Ops, GroupOp
@@ -52,6 +53,7 @@ flags = " nsz arcp contract afn"
 float_lop = {Ops.ADD: "fadd"+flags, Ops.MUL: "fmul"+flags, Ops.CMPLT: f"fcmp{flags} ult", Ops.CMPNE: f"fcmp{flags} une", Ops.FDIV: "fdiv"+flags}
 lop = {**{x:unsigned_lop for x in (dtypes.bool,)+dtypes.uints}, **{x:signed_lop for x in dtypes.sints}, **{x:float_lop for x in dtypes.floats}}
 
+base_rewrite = PatternMatcher([
 base_rewrite = PatternMatcher([
   # memory load/store
   (UPat(Ops.INDEX, name="x"), lambda ctx,x:
@@ -132,10 +134,12 @@ def llvm_bf16_cast(buf:UOp, idx:UOp, root:UOp):
 class LLVMRenderer(Renderer):
   device = "LLVM"
   abi = 'win64cc' if sys.platform == 'win32' else None
+  abi = 'win64cc' if sys.platform == 'win32' else None
   supports_float4 = True
   has_local = False
   has_shared = False
   global_max = None
+  string_rewrite = base_rewrite
   string_rewrite = base_rewrite
   if AMX: tensor_cores = ClangRenderer.amx_tc
 
