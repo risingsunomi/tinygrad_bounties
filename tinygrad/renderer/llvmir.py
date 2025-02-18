@@ -100,6 +100,29 @@ llvm_rewrite = PatternMatcher([
 
   # wmma
   (UPat(Ops.WMMA, name="wmma"), render_wmma),
+
+  # tensor movements
+  (UPat(Ops.CAT, src=(UPat.var('y'),), name="x"),
+    lambda ctx, x: 
+    f"""
+      %offset = alloca i32, align 4
+      store i32 0, i32* %offset, align 4
+      {''.join([
+          # load the input tensor
+          f"%inp_{i} = getelementptr inbounds {ldt(x[-1].dtype.base)}, {ldt(x[-1].dtype.base)} {ctx[x[-1]]}, i64 0\n"
+          f"%size_{i} = load i32, i32* {ctx[x[i]]}_size, align 4\n"
+
+          # load the output tensor
+          f"%outptr_{i} = getelementptr inbounds {ldt(y.dtype.base)}, {ldt(y.dtype.base)} {ctx[y]}, i64 %offset\n"
+
+          # copy the input tensor to the output tensor
+          f"call void @llvm.memcpy.p0.p0.i64({ldt(y.dtype.base)}* align 32 %outptr_{i}, {ldt(x[i].dtype.base)}* align 32 %inp_{i}, i64 %size_{i}, i1 false)\n"
+
+          # update the offset
+          f"%new_offset_{i} = add i32 %offset, %size_{i}\n"
+          f"store i32 %new_offset_{i}, i32* %offset, align 4\n"
+      for i in range(len(x)-1)])}
+    """),
 ])
 
 def llvm_bf16_cast(buf:UOp, idx:UOp, root:UOp):
@@ -166,6 +189,7 @@ class LLVMRenderer(Renderer):
 
         # do the rendering of the llvm ir code
         if (l:=llvm_rewrite.rewrite(u, ctx=r)) is None: raise RuntimeError(f"failed to render {u.op} with {u.dtype} srcs {[x.dtype for x in u.src]}")
+        print(f"\n\n\n LLVM REWRITE \n\n\n {l=} \n\n\n\n")
         kernel.append(cast(str, l))
 
         # generate the phi nodes for the assigns

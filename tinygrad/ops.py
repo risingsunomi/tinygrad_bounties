@@ -286,6 +286,7 @@ class UOp(MathTrait, metaclass=UOpMetaClass):
 
   @functools.cached_property
   def st(self) -> ShapeTracker|None:
+    print("st called")
     from tinygrad.shape.shapetracker import ShapeTracker
     if self.op is Ops.MULTI:
       return ShapeTracker.from_shape(
@@ -298,12 +299,16 @@ class UOp(MathTrait, metaclass=UOpMetaClass):
     if self.op in GroupOp.Buffer: return vsrc[0] if len(vsrc:=[x.st for x in self.src if x.op is Ops.VIEW]) != 0 else None
     if not (src_sts := [x.st for x in self.src if x.st is not None]): return None
     assert all_same([x.shape for x in src_sts]), f"UOp sources must have the same shape {self} {[x.shape for x in src_sts]}"
+    if self.op is Ops.CAT:
+      print("cat st hit")
+      print(f"\n{self=}\n{self.arg=}\n{self.src[0].st=}")
     if self.op in {Ops.BITCAST, Ops.BUFFER_VIEW}:
       shape = src_sts[0].shape
       if self.dtype.itemsize != (input_sz:=self.src[0].dtype.itemsize): shape = shape[:-1]+((shape[-1]*input_sz) // self.dtype.itemsize,)
     # only reduce ops are allowed to change shape, everything else derives shape from sources
     elif self.op in {Ops.REDUCE_AXIS, Ops.WMMA}: shape = src_sts[0].reduce(self.axis_arg)
     else: shape = src_sts[0].shape
+    print(f"return shape {shape}")
     return ShapeTracker.from_shape(shape)
 
   @functools.cached_property
@@ -513,6 +518,7 @@ class UOp(MathTrait, metaclass=UOpMetaClass):
 
   def _mop(self, op:Ops, arg):
     ret = UOp(op, self.dtype, (self,), arg)
+    print(f"{ret=}")
     if self.st == ret.st: return self  # ignore NOOPs, also check ret.st
     return ret
 
@@ -522,6 +528,12 @@ class UOp(MathTrait, metaclass=UOpMetaClass):
   def permute(self, arg:tuple[sint, ...]): return self._mop(Ops.PERMUTE, arg)
   def shrink(self, arg:tuple[tuple[sint, sint], ...]): return self._mop(Ops.SHRINK, arg)
   def flip(self, arg:tuple[bool, ...]): return self._mop(Ops.FLIP, arg)
+  
+  def cat(self, arg:tuple[Tensor, ...]): 
+    print("uop cat called")
+    mop = self._mop(Ops.CAT, arg)
+    print(f"{mop=}")
+    return mop
 
   # *** uop Buffer stuff ***
 

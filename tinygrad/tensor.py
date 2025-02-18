@@ -185,7 +185,9 @@ class Tensor(SimpleMathTrait):
   def __del__(self): all_tensors.discard(weakref.ref(self))
 
   def _apply_uop(self, fxn:Callable, *x:Tensor, **kwargs) -> Tensor:
+    print(f"_apply_uop: {fxn=}, {x=}, {kwargs=}")
     new_uop: UOp = fxn(*[t.lazydata for t in (self,)+x], **kwargs)
+    print(f"new_uop: {new_uop}")
     needs_input_grad = [t.requires_grad for t in (self,)+x]
     return Tensor(new_uop, device=new_uop.device, requires_grad=True if any(needs_input_grad) else None if None in needs_input_grad else False)
 
@@ -1278,22 +1280,68 @@ class Tensor(SimpleMathTrait):
     print(t0.cat(t1, t2, dim=1).numpy())
     ```
     """
+    print("\n\n\ntinygrad tensor.cat called")
+
+    start_time = time.perf_counter()  # Start timing
+
     dim = self._resolve_dim(dim)
-    for arg in args: assert arg.ndim==self.ndim and all(ti==ai for i,(ti,ai) in enumerate(zip(self.shape, arg.shape)) if i!=dim)
-    tensors = [self, *args]
-    dim_cumsum = list(itertools.accumulate([t.shape[dim] for t in tensors], initial=0))
-    for i,t in enumerate(tensors):
-      pad_dim = [(dim_cumsum[i], dim_cumsum[-1]-dim_cumsum[i+1]) if j==dim else None for j in range(t.ndim)]
-      tensors[i] = t.pad(pad_dim, "constant")
+    for arg in args:
+      assert arg.ndim==self.ndim and all(ti==ai for i,(ti,ai) in enumerate(zip(self.shape, arg.shape)) if i!=dim)
 
-    elems = iter(tensors)
-    out_val = next(elems)
-    for i, elem in enumerate(elems):
-      out_val = Tensor.add(out_val, elem)
+    tensors = (self, *args)
 
-    return out_val
+    # create output tensor
+    new_shape = list(self.shape)
+    new_shape[dim] = sum(t.shape[dim] for t in tensors)
+    out_tensor = Tensor.zeros(new_shape, dtype=self.dtype).contiguous()
+    
+    tensors = (*tensors, out_tensor)
+
+    # dim_cumsum = [0, self.shape[dim]]
+    # for arg in args:
+      # tensors.append(arg)
+      # dim_cumsum.append(dim_cumsum[-1] + arg.shape[dim])
+
+    step1_time = time.perf_counter()
+    print(f"Create out_tensor took {step1_time - start_time:.6f} sec")
+
+    # tensors = [
+      # t.pad(
+        # [(dim_cumsum[i], dim_cumsum[-1]-dim_cumsum[i+1]) if j==dim else None for j in range(t.ndim)]
+      # ) for i,t in enumerate(tensors)
+    # ]
+
+    # offset = 0
+    # for t in tensors:
+    #   slc = [slice(None)] * len(new_shape)
+    #   slc[dim] = slice(offset, offset + t.shape[dim])  # Slice along concat axis
+    #   out_tensor[tuple(slc)] = t
+    #   offset += t.shape[dim]
+
+    # step2_time = time.perf_counter()
+    # print(f"Step 2 took {step2_time - step1_time:.6f} sec")
+
+    # print(f"out_tensor: {out_tensor}")
+    
+    # elems = iter(tensors)
+    # out_val = next(elems)
+    # for elem in elems:
+    #   out_val = out_val + elem
+
+    # step3_time = time.perf_counter()
+    # print(f"Step 3: Concatenation (addition) took {step3_time - step2_time:.6f} sec")
+
+    # print(f"Total execution time: {step2_time - start_time:.6f} sec")
+
+    # return out_tensor
+
+    # print(f"out_val: {out_val}")
+
+    # return out_val
     
     # return functools.reduce(Tensor.add, tensors)
+    print(f"APPLY CAT UOP {UOp.cat}")
+    return self._apply_uop(UOp.cat, arg=tensors)
 
   def stack(self:Tensor, *args:Tensor, dim:int=0) -> Tensor:
     """
@@ -3139,8 +3187,6 @@ class Tensor(SimpleMathTrait):
       elif not isinstance(y, UOp): y_dtype = dtypes.from_py(y)
       if isinstance(y, UOp): y = Tensor.from_uop(y, device=x.device)
       else: y = Tensor(dtypes.as_const(y, y_dtype), x.device, y_dtype, requires_grad=False)
-    
-    if x.shape == y.shape: return x, y
 
     if match_dtype and x.dtype != y.dtype:
       output_dtype = least_upper_dtype(x.dtype, y.dtype)
@@ -3169,6 +3215,7 @@ class Tensor(SimpleMathTrait):
     print(t.add(Tensor([[2.0], [3.5]])).numpy())
     ```
     """
+    # print(f"add: {x=}, {reverse=}")
     return self._apply_broadcasted_uop(UOp.add, x, reverse)
 
   def sub(self, x:Union[Tensor, ConstType], reverse=False) -> Tensor:
