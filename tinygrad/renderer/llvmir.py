@@ -1,5 +1,5 @@
 from typing import cast
-import math, struct
+import math, struct, sys
 from tinygrad.renderer import Renderer
 from tinygrad.renderer.cstyle import ClangRenderer
 from tinygrad.ops import UOp, PatternMatcher, UPat, Ops, GroupOp
@@ -52,7 +52,7 @@ flags = " nsz arcp contract afn"
 float_lop = {Ops.ADD: "fadd"+flags, Ops.MUL: "fmul"+flags, Ops.CMPLT: f"fcmp{flags} ult", Ops.CMPNE: f"fcmp{flags} une", Ops.FDIV: "fdiv"+flags}
 lop = {**{x:unsigned_lop for x in (dtypes.bool,)+dtypes.uints}, **{x:signed_lop for x in dtypes.sints}, **{x:float_lop for x in dtypes.floats}}
 
-llvm_rewrite = PatternMatcher([
+base_rewrite = PatternMatcher([
   # memory load/store
   (UPat(Ops.INDEX, name="x"), lambda ctx,x:
    f"  {ctx[x]} = getelementptr inbounds {ldt(x.dtype.base)}, {ldt(x.src[0].dtype)} {ctx[x.src[0]]}, {ldt(x.src[1].dtype)} {ctx[x.src[1]]}"),
@@ -131,10 +131,12 @@ def llvm_bf16_cast(buf:UOp, idx:UOp, root:UOp):
 
 class LLVMRenderer(Renderer):
   device = "LLVM"
+  abi = 'win64cc' if sys.platform == 'win32' else None
   supports_float4 = True
   has_local = False
   has_shared = False
   global_max = None
+  string_rewrite = base_rewrite
   if AMX: tensor_cores = ClangRenderer.amx_tc
 
   extra_matcher = PatternMatcher([
@@ -147,9 +149,6 @@ class LLVMRenderer(Renderer):
     # rewrite bf16 CAST(LOAD) to CAST(BITCAST)
     (UPat(Ops.CAST, name="root", src=(UPat.load(UPat.index(UPat.var("buf"), UPat.var("idx")), dtype=dtypes.bfloat16),)), llvm_bf16_cast),
   ])
-
-  def __init__(self, abi:str|None=None):
-    self.abi = abi
 
   def render(self, name: str, uops: list[UOp]) -> str:
     r: dict[UOp, str] = {}
