@@ -54,7 +54,6 @@ float_lop = {Ops.ADD: "fadd"+flags, Ops.MUL: "fmul"+flags, Ops.CMPLT: f"fcmp{fla
 lop = {**{x:unsigned_lop for x in (dtypes.bool,)+dtypes.uints}, **{x:signed_lop for x in dtypes.sints}, **{x:float_lop for x in dtypes.floats}}
 
 base_rewrite = PatternMatcher([
-base_rewrite = PatternMatcher([
   # memory load/store
   (UPat(Ops.INDEX, name="x"), lambda ctx,x:
    f"  {ctx[x]} = getelementptr inbounds {ldt(x.dtype.base)}, {ldt(x.src[0].dtype)} {ctx[x.src[0]]}, {ldt(x.src[1].dtype)} {ctx[x.src[1]]}"),
@@ -191,7 +190,7 @@ class LLVMRenderer(Renderer):
           r[u] = f"%v{vc}"
 
         # do the rendering of the llvm ir code
-        if (l:=llvm_rewrite.rewrite(u, ctx=r)) is None: raise RuntimeError(f"failed to render {u.op} with {u.dtype} srcs {[x.dtype for x in u.src]}")
+        if (l:=base_rewrite.rewrite(u, ctx=r)) is None: raise RuntimeError(f"failed to render {u.op} with {u.dtype} srcs {[x.dtype for x in u.src]}")
         print(f"\n\n\n LLVM REWRITE \n\n\n {l=} \n\n\n\n")
         kernel.append(cast(str, l))
 
