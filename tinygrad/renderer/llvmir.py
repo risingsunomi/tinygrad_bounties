@@ -104,14 +104,14 @@ base_rewrite = PatternMatcher([
 
   # tensor movements
   (UPat(Ops.CAT, src=(UPat.var('y'),), name="x"),
-    lambda ctx, x: 
+    lambda ctx, x, y: 
     f"""
       %offset = alloca i32, align 4
       store i32 0, i32* %offset, align 4
       {''.join([
           # load the input tensor
-          f"%inp_{i} = getelementptr inbounds {ldt(x[-1].dtype.base)}, {ldt(x[-1].dtype.base)} {ctx[x[-1]]}, i64 0\n"
-          f"%size_{i} = load i32, i32* {ctx[x[i]]}_size, align 4\n"
+          f"%inp_{i} = getelementptr inbounds {ldt(y[i].dtype.base)}, {ldt(y[i].dtype.base)} {ctx[y[i]]}, i64 0\n"
+          f"%size_{i} = load i32, i32* {ctx[y[i]]}_size, align 4\n"
 
           # load the output tensor
           f"%outptr_{i} = getelementptr inbounds {ldt(y.dtype.base)}, {ldt(y.dtype.base)} {ctx[y]}, i64 %offset\n"
@@ -122,7 +122,7 @@ base_rewrite = PatternMatcher([
           # update the offset
           f"%new_offset_{i} = add i32 %offset, %size_{i}\n"
           f"store i32 %new_offset_{i}, i32* %offset, align 4\n"
-      for i in range(len(x)-1)])}
+      for i in range(len(y))])}
     """),
 ])
 

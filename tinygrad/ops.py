@@ -285,7 +285,7 @@ class UOp(MathTrait, metaclass=UOpMetaClass):
 
   @functools.cached_property
   def st(self) -> ShapeTracker|None:
-    print("st called")
+    # print("st called")
     from tinygrad.shape.shapetracker import ShapeTracker
     if self.op is Ops.MULTI:
       return ShapeTracker.from_shape(
@@ -301,7 +301,10 @@ class UOp(MathTrait, metaclass=UOpMetaClass):
     assert all_same([x.shape for x in src_sts]), f"UOp sources must have the same shape {self} {[x.shape for x in src_sts]}"
     if self.op is Ops.CAT:
       print("cat st hit")
-      print(f"\n{self=}\n{self.arg=}\n{self.src[0].st=}")
+      input_st_uw = unwrap(self.src[0].st)
+      arg_st_uw = unwrap(self.arg.lazydata.st)
+      print(f"\n{input_st_uw=}\n{arg_st_uw=}")
+      shape = src_sts[0].shape
     if self.op in {Ops.BITCAST, Ops.BUFFER_VIEW}:
       shape = src_sts[0].shape
       if self.dtype.itemsize != (input_sz:=self.src[0].dtype.itemsize): shape = shape[:-1]+((shape[-1]*input_sz) // self.dtype.itemsize,)
@@ -531,11 +534,17 @@ class UOp(MathTrait, metaclass=UOpMetaClass):
   def shrink(self, arg:tuple[tuple[sint, sint], ...]): return self._mop(Ops.SHRINK, arg)
   def flip(self, arg:tuple[bool, ...]): return self._mop(Ops.FLIP, arg)
   
-  def cat(self, arg:tuple[Tensor, ...]): 
+  def cat(self, arg): 
     print("uop cat called")
-    mop = self._mop(Ops.CAT, arg)
+    print(f"{self=}\n{arg=}\n{len(Ops.CAT)}")
+    cat_ops = Ops.CAT
+    cat_ops.bit_length = 1
+    print(f"{arg=}\n{arg.numpy()=}")
+    mop = self._mop(Ops.ADD, arg)
     print(f"{mop=}")
-    return mop
+    return UPat(cat_ops, self.dtype, (self,), arg)
+    # return self._binop(Ops.CAT, arg.numpy(), True)
+    # return self._mop(Ops.ADD, arg)
 
   # *** uop UNIQUE ***
 
@@ -744,6 +753,8 @@ class UPat(MathTrait):
   def __init__(self, op:Optional[Union[Ops, tuple[Ops, ...], set[Ops]]]=None, dtype:Optional[Union[DType, tuple[DType, ...]]]=None,
                src:Optional[Union[tuple[UPat, ...], list[UPat], UPat]]=None, arg:Any=None,
                name:Optional[str]=None, allow_any_len:bool=False, location=None, custom_early_reject:Optional[set[Ops]]=None):
+    print("UPat init called")
+    print(f"{op=}\n{dtype=}\n{src=}\n{arg=}\n{name=}\n{allow_any_len=}\n{location=}\n{custom_early_reject=}")
     assert op is None or isinstance(op, Ops) or isinstance(op, tuple) or isinstance(op, set), "op must be Ops or tuple of Ops"
     self.op: Optional[tuple[Ops, ...]] = (op,) if isinstance(op, Ops) else (tuple(op) if isinstance(op, set) else op)
     self.dtype: Optional[tuple[DType, ...]] = (dtype,) if isinstance(dtype, DType) else dtype
@@ -763,8 +774,11 @@ class UPat(MathTrait):
 
     if custom_early_reject is not None: self.early_reject = custom_early_reject
     else:
+      print(f"{src=}")
       upat_match = [src] if isinstance(src, UPat) else ([] if src is None else self.src[0])
+      print(f"{upat_match=}")
       self.early_reject = {pp.op[0] for pp in upat_match if pp.op is not None and len(pp.op) == 1}
+      print(f"{self.early_reject=}")
 
   def named(self, name:str): return UPat(self.op, self.dtype, self._in_src, self.arg, name, self.allowed_len == -1, self.custom_early_reject)
 

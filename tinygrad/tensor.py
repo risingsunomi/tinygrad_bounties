@@ -1294,8 +1294,10 @@ class Tensor(SimpleMathTrait):
     new_shape = list(self.shape)
     new_shape[dim] = sum(t.shape[dim] for t in tensors)
     out_tensor = Tensor.zeros(new_shape, dtype=self.dtype).contiguous()
+
+    #print(f"\n\n\ntensor[0].shape \n {tensors[0].numpy()=}")
     
-    tensors = (*tensors, out_tensor)
+    tensors = (self, *tensors)
 
     # dim_cumsum = [0, self.shape[dim]]
     # for arg in args:
@@ -1341,7 +1343,11 @@ class Tensor(SimpleMathTrait):
     
     # return functools.reduce(Tensor.add, tensors)
     print(f"APPLY CAT UOP {UOp.cat}")
-    return self._apply_uop(UOp.cat, arg=tensors)
+
+    # creating a new tensor and assign it to self
+    self = out_tensor._apply_uop(UOp.cat, arg=tensors[0])
+    print(f"\n\n new self {self} \n\n")
+    return self
 
   def stack(self:Tensor, *args:Tensor, dim:int=0) -> Tensor:
     """
