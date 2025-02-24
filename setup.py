@@ -16,15 +16,16 @@ testing_minimal = [
 ]
 
 setup(name='tinygrad',
-      version='0.10.1',
+      version='0.10.2',
       description='You like pytorch? You like micrograd? You love tinygrad! <3',
       author='George Hotz',
       license='MIT',
       long_description=long_description,
       long_description_content_type='text/markdown',
-      packages = ['tinygrad', 'tinygrad.runtime.autogen', 'tinygrad.codegen', 'tinygrad.nn', 'tinygrad.renderer', 'tinygrad.engine', 'tinygrad.viz',
-                  'tinygrad.runtime', 'tinygrad.runtime.support', 'tinygrad.runtime.support.am', 'tinygrad.runtime.graph', 'tinygrad.shape'],
-      package_data = {'tinygrad': ['py.typed'], 'tinygrad.viz': ['index.html', 'perfetto.html', 'assets/**/*']},
+      packages = ['tinygrad', 'tinygrad.runtime.autogen', 'tinygrad.runtime.autogen.am', 'tinygrad.codegen', 'tinygrad.nn',
+                  'tinygrad.renderer', 'tinygrad.engine', 'tinygrad.viz', 'tinygrad.runtime', 'tinygrad.runtime.support',
+                  'tinygrad.runtime.support.am', 'tinygrad.runtime.graph', 'tinygrad.shape'],
+      package_data = {'tinygrad': ['py.typed'], 'tinygrad.viz': ['index.html', 'perfetto.html', 'assets/**/*', 'lib/**/*']},
       classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License"
