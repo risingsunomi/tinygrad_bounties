@@ -49,7 +49,8 @@ def render_wmma(ctx, wmma: UOp) -> str:
 unsigned_lop = { Ops.ADD: "add", Ops.MUL: "mul", Ops.IDIV: "udiv", Ops.MOD: "urem",
                  Ops.CMPLT: "icmp ult", Ops.CMPNE: "icmp ne", Ops.OR: "or", Ops.AND: "and", Ops.XOR: "xor", }
 signed_lop = {**unsigned_lop, Ops.CMPLT: "icmp slt", Ops.IDIV: "sdiv", Ops.MOD: "srem"}
-flags = " nsz arcp contract afn"
+# flags = " nsz arcp contract afn"
+flags = " fast arcp contract"
 float_lop = {Ops.ADD: "fadd"+flags, Ops.MUL: "fmul"+flags, Ops.CMPLT: f"fcmp{flags} ult", Ops.CMPNE: f"fcmp{flags} une", Ops.FDIV: "fdiv"+flags}
 lop = {**{x:unsigned_lop for x in (dtypes.bool,)+dtypes.uints}, **{x:signed_lop for x in dtypes.sints}, **{x:float_lop for x in dtypes.floats}}
 
@@ -102,28 +103,9 @@ base_rewrite = PatternMatcher([
   # wmma
   (UPat(Ops.WMMA, name="wmma"), render_wmma),
 
-  # tensor movements
-  (UPat(Ops.CAT, src=(UPat.var('y'),), name="x"),
-    lambda ctx, x, y: 
-    f"""
-      %offset = alloca i32, align 4
-      store i32 0, i32* %offset, align 4
-      {''.join([
-          # load the input tensor
-          f"%inp_{i} = getelementptr inbounds {ldt(y[i].dtype.base)}, {ldt(y[i].dtype.base)} {ctx[y[i]]}, i64 0\n"
-          f"%size_{i} = load i32, i32* {ctx[y[i]]}_size, align 4\n"
+  # cat 
+  (UPat(Ops.CAT, name="x"), lambda ctx,x: f""),
 
-          # load the output tensor
-          f"%outptr_{i} = getelementptr inbounds {ldt(y.dtype.base)}, {ldt(y.dtype.base)} {ctx[y]}, i64 %offset\n"
-
-          # copy the input tensor to the output tensor
-          f"call void @llvm.memcpy.p0.p0.i64({ldt(y.dtype.base)}* align 32 %outptr_{i}, {ldt(x[i].dtype.base)}* align 32 %inp_{i}, i64 %size_{i}, i1 false)\n"
-
-          # update the offset
-          f"%new_offset_{i} = add i32 %offset, %size_{i}\n"
-          f"store i32 %new_offset_{i}, i32* %offset, align 4\n"
-      for i in range(len(y))])}
-    """),
 ])
 
 def llvm_bf16_cast(buf:UOp, idx:UOp, root:UOp):
@@ -154,6 +136,7 @@ class LLVMRenderer(Renderer):
   ])
 
   def render(self, uops: list[UOp]) -> str:
+    # print(f"llvm render: {uops=}")
     r: dict[UOp, str] = {}
     args: list[str] = []
     kernel: list[str] = []
@@ -176,6 +159,8 @@ class LLVMRenderer(Renderer):
 
     name = "test"
     for u in uops:
+      if u.op is Ops.CAT:
+        print("Ops.CAT called in LLVMRenderer")
       if u.op is Ops.NAME:
         name = u.arg
         continue
@@ -195,8 +180,10 @@ class LLVMRenderer(Renderer):
 
         # do the rendering of the llvm ir code
         if (l:=base_rewrite.rewrite(u, ctx=r)) is None: raise RuntimeError(f"failed to render {u.op} with {u.dtype} srcs {[x.dtype for x in u.src]}")
-        print(f"\n\n\n LLVM REWRITE \n\n\n {l=} \n\n\n\n")
         kernel.append(cast(str, l))
+
+        if u.op is Ops.CAT:
+          print(f"{cast(str, l)=}")
 
         # generate the phi nodes for the assigns
         if u.op is Ops.RANGE:

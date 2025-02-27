@@ -64,9 +64,11 @@ def helper_test_speed(f1, *args):
 
 def helper_test_generic_square(name, N, f1, f2, onearg=False):
   torch.manual_seed(0)
+  print("creating test torch tensors")
   torch_a = (torch.rand(N, N, dtype=torch_dt) - 0.5).to(torch_device)
   torch_b = (torch.rand(N, N, dtype=torch_dt) - 0.5).to(torch_device) if not onearg else None
 
+  print("creating test tinygrad tensors")
   tiny_a = Tensor(torch_a.cpu().numpy())
   tiny_b = Tensor(torch_b.cpu().numpy()) if not onearg else None
 

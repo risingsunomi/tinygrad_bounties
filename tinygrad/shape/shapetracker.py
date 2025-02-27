@@ -128,7 +128,8 @@ class ShapeTracker:
 
   # *** under this line are the movement ops ***
 
-  def pad(self, arg: tuple[tuple[sint, sint], ...]) -> ShapeTracker: return ShapeTracker(self.views[0:-1] + (self.views[-1].pad(arg), ))
+  def pad(self, arg: tuple[tuple[sint, sint], ...]) -> ShapeTracker: 
+    return ShapeTracker(self.views[0:-1] + (self.views[-1].pad(arg), ))
   def shrink(self, arg: tuple[tuple[sint, sint], ...]) -> ShapeTracker: return ShapeTracker(self.views[0:-1] + (self.views[-1].shrink(arg), ))
   def expand(self, new_shape: tuple[sint, ...]) -> ShapeTracker: return ShapeTracker(self.views[0:-1] + (self.views[-1].expand(new_shape), ))
   def permute(self, axis: tuple[int, ...]) -> ShapeTracker: return ShapeTracker(self.views[0:-1] + (self.views[-1].permute(axis), ))

@@ -185,9 +185,9 @@ class Tensor(SimpleMathTrait):
   def __del__(self): all_tensors.discard(weakref.ref(self))
 
   def _apply_uop(self, fxn:Callable, *x:Tensor, **kwargs) -> Tensor:
-    print(f"_apply_uop: {fxn=}, {x=}, {kwargs=}")
+    # print(f"_apply_uop: {fxn=}, {x=}, {kwargs=}")
     new_uop: UOp = fxn(*[t.lazydata for t in (self,)+x], **kwargs)
-    print(f"new_uop: {new_uop}")
+    # print(f"new_uop: {new_uop}")
     needs_input_grad = [t.requires_grad for t in (self,)+x]
     return Tensor(new_uop, device=new_uop.device, requires_grad=True if any(needs_input_grad) else None if None in needs_input_grad else False)
 
@@ -1288,66 +1288,46 @@ class Tensor(SimpleMathTrait):
     for arg in args:
       assert arg.ndim==self.ndim and all(ti==ai for i,(ti,ai) in enumerate(zip(self.shape, arg.shape)) if i!=dim)
 
-    tensors = (self, *args)
+    tensors = [self, *args]
 
-    # create output tensor
-    new_shape = list(self.shape)
-    new_shape[dim] = sum(t.shape[dim] for t in tensors)
-    out_tensor = Tensor.zeros(new_shape, dtype=self.dtype).contiguous()
-
-    #print(f"\n\n\ntensor[0].shape \n {tensors[0].numpy()=}")
+    dim_cumsum = list(itertools.accumulate([t.shape[dim] for t in tensors], initial=0))
     
-    tensors = (self, *tensors)
+    for i,t in enumerate(tensors):
+      tensors[i] = t.pad([
+        (
+          dim_cumsum[i],
+          dim_cumsum[-1]-dim_cumsum[i+1]
+        ) if j==dim else None for j in range(t.ndim)
+      ])
 
-    # dim_cumsum = [0, self.shape[dim]]
-    # for arg in args:
-      # tensors.append(arg)
-      # dim_cumsum.append(dim_cumsum[-1] + arg.shape[dim])
 
-    step1_time = time.perf_counter()
-    print(f"Create out_tensor took {step1_time - start_time:.6f} sec")
-
+    print(f"tensors:")
+    for t in tensors:
+      print(t)
+      print(t.lazydata)
+      
     # tensors = [
-      # t.pad(
-        # [(dim_cumsum[i], dim_cumsum[-1]-dim_cumsum[i+1]) if j==dim else None for j in range(t.ndim)]
-      # ) for i,t in enumerate(tensors)
+    #   t.pad(
+    #     [(dim_cumsum[i], dim_cumsum[-1]-t.shape[dim]) if j==dim else None for j in range(t.ndim)]
+    #   ) for i,t in enumerate(*args)
     # ]
 
-    # offset = 0
-    # for t in tensors:
-    #   slc = [slice(None)] * len(new_shape)
-    #   slc[dim] = slice(offset, offset + t.shape[dim])  # Slice along concat axis
-    #   out_tensor[tuple(slc)] = t
-    #   offset += t.shape[dim]
+    padding_time = time.perf_counter()
+    print(f"Padding took {padding_time - start_time:.6f} sec")
 
-    # step2_time = time.perf_counter()
-    # print(f"Step 2 took {step2_time - step1_time:.6f} sec")
+    # out_tensor = functools.reduce(Tensor.add, tensors)
 
-    # print(f"out_tensor: {out_tensor}")
+    elems = iter(tensors)
+    out_tensor = next(elems)
+    for elem in elems:
+      # out_tensor = out_tensor + elem
+      out_tensor = out_tensor._apply_uop(UOp.cat, elem)
+
+    # adding_time = time.perf_counter()
+    # print(f"Concatenation (addition) took {adding_time - start_time:.6f} sec\n\n")
+
+    return out_tensor
     
-    # elems = iter(tensors)
-    # out_val = next(elems)
-    # for elem in elems:
-    #   out_val = out_val + elem
-
-    # step3_time = time.perf_counter()
-    # print(f"Step 3: Concatenation (addition) took {step3_time - step2_time:.6f} sec")
-
-    # print(f"Total execution time: {step2_time - start_time:.6f} sec")
-
-    # return out_tensor
-
-    # print(f"out_val: {out_val}")
-
-    # return out_val
-    
-    # return functools.reduce(Tensor.add, tensors)
-    print(f"APPLY CAT UOP {UOp.cat}")
-
-    # creating a new tensor and assign it to self
-    self = out_tensor._apply_uop(UOp.cat, arg=tensors[0])
-    print(f"\n\n new self {self} \n\n")
-    return self
 
   def stack(self:Tensor, *args:Tensor, dim:int=0) -> Tensor:
     """

@@ -156,7 +156,7 @@ class Ops(FastEnum):
 class GroupOp:
   Unary = {Ops.EXP2, Ops.LOG2, Ops.SIN, Ops.SQRT, Ops.RECIP, Ops.NEG}
   Binary = {Ops.ADD, Ops.MUL, Ops.IDIV, Ops.MAX, Ops.MOD, Ops.CMPLT, Ops.CMPNE, Ops.XOR, Ops.SHL, Ops.SHR, Ops.OR, Ops.AND, Ops.THREEFRY,
-            Ops.SUB, Ops.FDIV, Ops.POW}
+            Ops.SUB, Ops.FDIV, Ops.POW, Ops.CAT}
   Ternary = {Ops.WHERE, Ops.MULACC}
   ALU = set.union(Unary, Binary, Ternary)
 
@@ -301,9 +301,10 @@ class UOp(MathTrait, metaclass=UOpMetaClass):
     assert all_same([x.shape for x in src_sts]), f"UOp sources must have the same shape {self} {[x.shape for x in src_sts]}"
     if self.op is Ops.CAT:
       print("cat st hit")
-      input_st_uw = unwrap(self.src[0].st)
-      arg_st_uw = unwrap(self.arg.lazydata.st)
-      print(f"\n{input_st_uw=}\n{arg_st_uw=}")
+      # input_st_uw = unwrap(self.src[0].st)
+      # arg_st_uw = unwrap(self.arg.lazydata.st)
+      # print(f"\n{input_st_uw=}\n{arg_st_uw=}")
+      print(self.src)
       shape = src_sts[0].shape
     if self.op in {Ops.BITCAST, Ops.BUFFER_VIEW}:
       shape = src_sts[0].shape
@@ -311,7 +312,7 @@ class UOp(MathTrait, metaclass=UOpMetaClass):
     # only reduce ops are allowed to change shape, everything else derives shape from sources
     elif self.op in {Ops.REDUCE_AXIS, Ops.WMMA}: shape = src_sts[0].reduce(self.axis_arg)
     else: shape = src_sts[0].shape
-    print(f"return shape {shape}")
+    
     return ShapeTracker.from_shape(shape)
 
   @functools.cached_property
@@ -500,7 +501,7 @@ class UOp(MathTrait, metaclass=UOpMetaClass):
 
   def _mop(self, op:Ops, arg):
     ret = UOp(op, self.dtype, (self,), arg)
-    print(f"{ret=}")
+    # print(f"{ret=}")
     if self.st == ret.st: return self  # ignore NOOPs, also check ret.st
     return ret
 
@@ -513,15 +514,21 @@ class UOp(MathTrait, metaclass=UOpMetaClass):
   
   def cat(self, arg): 
     print("uop cat called")
-    print(f"{self=}\n{arg=}\n{len(Ops.CAT)}")
-    cat_ops = Ops.CAT
-    cat_ops.bit_length = 1
-    print(f"{arg=}\n{arg.numpy()=}")
-    mop = self._mop(Ops.ADD, arg)
-    print(f"{mop=}")
-    return UPat(cat_ops, self.dtype, (self,), arg)
-    # return self._binop(Ops.CAT, arg.numpy(), True)
-    # return self._mop(Ops.ADD, arg)
+    print(f"{self=}\n{self.device=}\n")
+    
+    # arg.device = "LLVM"
+    print(f"{arg=}\n{arg.device=}")
+
+    # return self._binop(Ops.ADD, arg[0][0], False)
+    cat_mop = self._mop(Ops.CAT, arg)
+    print(f"{cat_mop=}")
+
+    return cat_mop
+    # ret = UOp(Ops.CAT, self.dtype, (UOp(Ops.VECTORIZE, self.dtype, (self,), arg),), arg)
+    # print(f"{ret=}")
+    
+    # return ret
+    # return UPat(cat_ops, self.dtype, (self,), arg)
 
   # *** uop UNIQUE ***
 
@@ -729,8 +736,7 @@ class UPat(MathTrait):
   def __init__(self, op:Optional[Union[Ops, tuple[Ops, ...], set[Ops]]]=None, dtype:Optional[Union[DType, tuple[DType, ...]]]=None,
                src:Optional[Union[tuple[UPat, ...], list[UPat], UPat]]=None, arg:Any=None,
                name:Optional[str]=None, allow_any_len:bool=False, location=None, custom_early_reject:Optional[set[Ops]]=None):
-    print("UPat init called")
-    print(f"{op=}\n{dtype=}\n{src=}\n{arg=}\n{name=}\n{allow_any_len=}\n{location=}\n{custom_early_reject=}")
+    
     assert op is None or isinstance(op, Ops) or isinstance(op, tuple) or isinstance(op, set), "op must be Ops or tuple of Ops"
     self.op: Optional[tuple[Ops, ...]] = (op,) if isinstance(op, Ops) else (tuple(op) if isinstance(op, set) else op)
     self.dtype: Optional[tuple[DType, ...]] = (dtype,) if isinstance(dtype, DType) else dtype
@@ -750,11 +756,8 @@ class UPat(MathTrait):
 
     if custom_early_reject is not None: self.early_reject = custom_early_reject
     else:
-      print(f"{src=}")
       upat_match = [src] if isinstance(src, UPat) else ([] if src is None else self.src[0])
-      print(f"{upat_match=}")
       self.early_reject = {pp.op[0] for pp in upat_match if pp.op is not None and len(pp.op) == 1}
-      print(f"{self.early_reject=}")
 
   def named(self, name:str): return UPat(self.op, self.dtype, self._in_src, self.arg, name, self.allowed_len == -1, self.custom_early_reject)
 
