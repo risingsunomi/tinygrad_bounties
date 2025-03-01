@@ -70,6 +70,9 @@ def helper_test_generic_square(name, N, f1, f2, onearg=False):
 
   print("creating test tinygrad tensors")
   tiny_a = Tensor(torch_a.cpu().numpy())
+  print(f"{tiny_a=}")
+  print(f"{tiny_a.lazydata=}")
+  print(f"{tiny_a.schedule()=}")
   tiny_b = Tensor(torch_b.cpu().numpy()) if not onearg else None
 
   helper_test_generic(f"{name:30s} {N:5d}x{N:5d}", f1, (torch_a, torch_b), TinyJit(f2), (tiny_a, tiny_b))

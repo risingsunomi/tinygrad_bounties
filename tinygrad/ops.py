@@ -299,13 +299,6 @@ class UOp(MathTrait, metaclass=UOpMetaClass):
     if self.op in GroupOp.Buffer: return vsrc[0] if len(vsrc:=[x.st for x in self.src if x.op is Ops.VIEW]) != 0 else None
     if not (src_sts := [x.st for x in self.src if x.st is not None]): return None
     assert all_same([x.shape for x in src_sts]), f"UOp sources must have the same shape {self} {[x.shape for x in src_sts]}"
-    if self.op is Ops.CAT:
-      print("cat st hit")
-      # input_st_uw = unwrap(self.src[0].st)
-      # arg_st_uw = unwrap(self.arg.lazydata.st)
-      # print(f"\n{input_st_uw=}\n{arg_st_uw=}")
-      print(self.src)
-      shape = src_sts[0].shape
     if self.op is Ops.BITCAST:
       shape = src_sts[0].shape
       if self.dtype.itemsize != (input_sz:=self.src[0].dtype.itemsize): shape = shape[:-1]+((shape[-1]*input_sz) // self.dtype.itemsize,)
@@ -501,23 +494,45 @@ class UOp(MathTrait, metaclass=UOpMetaClass):
   def shrink(self, arg:tuple[tuple[sint, sint], ...]): return self._mop(Ops.SHRINK, arg)
   def flip(self, arg:tuple[bool, ...]): return self._mop(Ops.FLIP, arg)
   
-  def cat(self, arg): 
+  def cat(self, *arg): 
     print("uop cat called")
     print(f"{self=}\n{self.device=}\n")
-    
-    # arg.device = "LLVM"
-    print(f"{arg=}\n{arg.device=}")
+    print(f"{arg=}\n")
 
-    # return self._binop(Ops.ADD, arg[0][0], False)
-    cat_mop = self._mop(Ops.CAT, arg)
-    print(f"{cat_mop=}")
+    # offset = 0
 
-    return cat_mop
-    # ret = UOp(Ops.CAT, self.dtype, (UOp(Ops.VECTORIZE, self.dtype, (self,), arg),), arg)
-    # print(f"{ret=}")
-    
-    # return ret
-    # return UPat(cat_ops, self.dtype, (self,), arg)
+    # output buffer
+    # sb = self.src[0]
+    # print(f"{sb=}")
+    # smv = sb.buffer.as_buffer()
+
+    # itcnt = 0
+    # for in_uop in arg:
+    #   print(f"cat tensor # {itcnt}\n{in_uop=}")
+    #   ab = in_uop.src[0]
+    #   print(f"{ab=}")
+    #   amv = ab.buffer.as_buffer()
+
+    #   print(f"{amv.nbytes=}\n{amv.shape=}")
+    #   print(f"{smv.nbytes=}\n{smv.shape=}")
+
+    #   ret = UPat(Ops.CAT, src=None, arg=in_uop)
+    #   print(f"ret: {ret=}")
+
+    #   # need to add offset
+    #   if amv.nbytes <= smv.nbytes:
+    #     offset = amv.nbytes * itcnt if itcnt > 0 else 0
+        
+    #     # print(f"{offset=}")
+
+    #     # move to output tensor
+    #     smv[offset:offset + amv.nbytes] = amv
+    #     itcnt += 1
+
+    # sb.buffer.copyin(smv)
+
+    # return uop of cat src
+    return self._mop(Ops.CAT, arg)
 
   # *** uop UNIQUE ***
 

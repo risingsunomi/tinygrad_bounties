@@ -245,6 +245,7 @@ class TinyJit(Generic[ReturnType]):
     input_buffers, var_vals, names, st_vars_dtype_device = _prepare_jit_inputs(args, kwargs)
     if not JIT or self.cnt == 0:
       # jit ignore
+      # print("jit ignore")
       assert self.fxn is not None
       with Context(BEAM=0 if getenv("IGNORE_JIT_FIRST_BEAM") else BEAM.value):
         ret = self.fxn(*args, **kwargs)
@@ -260,6 +261,7 @@ class TinyJit(Generic[ReturnType]):
         capturing.append(self)
         try:
           ret = self.fxn(*args, **kwargs)
+          # print(f"\nJIT {ret=}\n")
           if len(params:=get_parameters(ret)): Tensor.realize(params[0], *params[1:])
         except Exception as e: raise e
         finally: capturing.clear()

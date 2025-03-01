@@ -159,8 +159,6 @@ class LLVMRenderer(Renderer):
 
     name = "test"
     for u in uops:
-      if u.op is Ops.CAT:
-        print("Ops.CAT called in LLVMRenderer")
       if u.op is Ops.NAME:
         name = u.arg
         continue

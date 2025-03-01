@@ -184,6 +184,10 @@ class Tensor(SimpleMathTrait):
     new_uop: UOp = fxn(*[t.lazydata for t in (self,)+x], **kwargs)
     # print(f"new_uop: {new_uop}")
     needs_input_grad = [t.requires_grad for t in (self,)+x]
+    # new_tensor = Tensor(new_uop, device=new_uop.device, requires_grad=True if any(needs_input_grad) else None if None in needs_input_grad else False)
+    # print(f"{new_tensor=}")
+    # print(f"{new_tensor.schedule()=}")
+    # return new_tensor
     return Tensor(new_uop, device=new_uop.device, requires_grad=True if any(needs_input_grad) else None if None in needs_input_grad else False)
 
   def _apply_broadcasted_uop(self, fxn:Callable, x:Union[Tensor, ConstType], reverse=False) -> Tensor:
@@ -230,12 +234,14 @@ class Tensor(SimpleMathTrait):
   # ***** data handlers ****
 
   def schedule_with_vars(self, *lst:Tensor) -> tuple[list[ScheduleItem], dict[Variable, int]]:
+    # print(f"schedule_with_vars called {self=}, {lst=}...")
     """
     Creates the schedule needed to realize these Tensor(s), with Variables.
 
     NOTE: A Tensor can only be scheduled once.
     """
     big_sink = UOp.sink(*[x.lazydata for x in (self,)+lst])
+    # print(f"{big_sink=}")
 
     # TODO: move this to scheduler tensor_map pass
     if any(x.op is Ops.MULTI for x in big_sink.toposort):
@@ -1275,53 +1281,68 @@ class Tensor(SimpleMathTrait):
     print(t0.cat(t1, t2, dim=1).numpy())
     ```
     """
-    print("\n\n\ntinygrad tensor.cat called")
+    # start_time = time.perf_counter()  # Start timing
 
-    start_time = time.perf_counter()  # Start timing
+    # dim = self._resolve_dim(dim)
+    # for arg in args:
+    #   assert arg.ndim==self.ndim and all(ti==ai for i,(ti,ai) in enumerate(zip(self.shape, arg.shape)) if i!=dim)
+    #   print(f"{arg.schedule()=}")
+    # tensors = [self, *args]
 
-    dim = self._resolve_dim(dim)
-    for arg in args:
-      assert arg.ndim==self.ndim and all(ti==ai for i,(ti,ai) in enumerate(zip(self.shape, arg.shape)) if i!=dim)
+    # dim_cumsum = list(itertools.accumulate([t.shape[dim] for t in tensors], initial=0))
 
-    tensors = [self, *args]
+    # # create a new empty buffer of new dim shape and assign to self as tensor
+    # new_shape = list(self.shape)
+    # new_shape[dim] = sum(t.shape[dim] for t in tensors)
 
-    dim_cumsum = list(itertools.accumulate([t.shape[dim] for t in tensors], initial=0))
+    # out_tensor = Tensor([new_shape], dtype=self.dtype, device=self.device)
+    # print(f"{out_tensor.schedule()=}")
+
+    # padding
+    # for i,t in enumerate(tensors):
+    #   tensors[i] = t.pad([(dim_cumsum[i], dim_cumsum[-1]-dim_cumsum[i+1]) if j==dim else None for j in range(t.ndim)])
+
+    # print(f"{tensors[0].numpy()=}")
+
+      # for t in tensors:
     
-    for i,t in enumerate(tensors):
-      tensors[i] = t.pad([
-        (
-          dim_cumsum[i],
-          dim_cumsum[-1]-dim_cumsum[i+1]
-        ) if j==dim else None for j in range(t.ndim)
-      ])
+    # elems = iter(tensors)
+    # out_tensor = next(elems)
+    # for elem in elems:
+    #   print(f"bf {out_tensor=}\n{out_tensor.lazydata=}\n")
+    #   out_tensor = out_tensor + elem
+    #   print(f"af {out_tensor=}\n{out_tensor.lazydata=}")
+
+    # print(f"{t.numpy()=}")
+
+    # padding_time = time.perf_counter()
+    # print(f"Padding took {padding_time - start_time:.6f} sec")
 
 
-    print(f"tensors:")
-    for t in tensors:
-      print(t)
-      print(t.lazydata)
-      
-    # tensors = [
-    #   t.pad(
-    #     [(dim_cumsum[i], dim_cumsum[-1]-t.shape[dim]) if j==dim else None for j in range(t.ndim)]
-    #   ) for i,t in enumerate(*args)
-    # ]
-
-    padding_time = time.perf_counter()
-    print(f"Padding took {padding_time - start_time:.6f} sec")
 
     # out_tensor = functools.reduce(Tensor.add, tensors)
+    # # print(f"cat self with {len(tensors)} tensor(s)")
+    # uop_tensor = out_tensor._apply_uop(UOp.cat, tensors)
+    # out_tensor = out_tensor.realize(uop_tensor)
+    # print(f"{uop_tensor.schedule()=}")
+    # print(f"{out_tensor.schedule()=}")
+    # # print(f"{out_tensor.lazydata.st.views[0].mask=}")
 
-    elems = iter(tensors)
-    out_tensor = next(elems)
-    for elem in elems:
-      # out_tensor = out_tensor + elem
-      out_tensor = out_tensor._apply_uop(UOp.cat, elem)
+    # cat_time = time.perf_counter()
+    # print(f"Concatenation took {cat_time - start_time:.6f} sec")
 
-    # adding_time = time.perf_counter()
-    # print(f"Concatenation (addition) took {adding_time - start_time:.6f} sec\n\n")
+    # # adding_time = time.perf_counter()
+    # # print(f"Concatenation (addition) took {adding_time - start_time:.6f} sec\n\n")
 
-    return out_tensor
+    dim = self._resolve_dim(dim)
+    for arg in args: assert arg.ndim==self.ndim and all(ti==ai for i,(ti,ai) in enumerate(zip(self.shape, arg.shape)) if i!=dim)
+    tensors = [self, *args]
+    dim_cumsum = list(itertools.accumulate([t.shape[dim] for t in tensors], initial=0))
+    for i,t in enumerate(tensors): tensors[i] = t.pad([(dim_cumsum[i], dim_cumsum[-1]-dim_cumsum[i+1]) if j==dim else None for j in range(t.ndim)])
+
+    print(f"{tensors=}")
+    
+    return functools.reduce(Tensor.add, tensors)
     
 
   def stack(self:Tensor, *args:Tensor, dim:int=0) -> Tensor:
