@@ -11,7 +11,7 @@ from tinygrad.gradient import compute_gradient
 from tinygrad.ops import smax, smin, resolve, UOp, Ops, sint, Variable, SimpleMathTrait, identity_element
 from tinygrad.spec import tensor_uop_spec, type_verify
 from tinygrad.device import Device, BufferSpec
-from tinygrad.engine.realize import run_schedule
+from tinygrad.engine.realize import run_schedule, lower_schedule_item
 from tinygrad.engine.memory import memory_planner
 from tinygrad.engine.schedule import ScheduleItem, create_schedule_with_vars
 
@@ -259,6 +259,7 @@ class Tensor(SimpleMathTrait):
 
   def realize(self, *lst:Tensor, do_update_stats=True) -> Tensor:
     """Triggers the computation needed to create these Tensor(s)."""
+    # print(f"\n\nrealizing {self=} {lst=}")
     run_schedule(*self.schedule_with_vars(*lst), do_update_stats=do_update_stats)
     return self
 
@@ -1276,12 +1277,36 @@ class Tensor(SimpleMathTrait):
     print(t0.cat(t1, t2, dim=1).numpy())
     ```
     """
+    const_self = self
+    cs_schedule = const_self.schedule()
+    print(f"{cs_schedule=}")
+    print(f"{const_self=}")
+
     dim = self._resolve_dim(dim)
+    
     for arg in args: assert arg.ndim==self.ndim and all(ti==ai for i,(ti,ai) in enumerate(zip(self.shape, arg.shape)) if i!=dim)
+    
     tensors = [self, *args]
+    
     dim_cumsum = list(itertools.accumulate([t.shape[dim] for t in tensors], initial=0))
-    for i,t in enumerate(tensors): tensors[i] = t.pad([(dim_cumsum[i], dim_cumsum[-1]-dim_cumsum[i+1]) if j==dim else None for j in range(t.ndim)])
-    return functools.reduce(Tensor.add, tensors)
+    
+    for i,t in enumerate(tensors):
+      tensors[i] = t.pad(
+        [(dim_cumsum[i], dim_cumsum[-1]-dim_cumsum[i+1]) if j==dim else None for j in range(t.ndim)]
+      )
+    
+    print(f"{tensors=}")
+
+    itt = iter(tensors)
+    x = next(itt)
+    for y in itt: 
+      print(f"{x=}\n{y=}")
+      x = x._apply_uop(UOp.cat, arg=y.lazydata)
+      print(f"{x.schedule()=}")
+
+    
+    # return functools.reduce(Tensor.add, tensors)
+    return x
 
   def stack(self:Tensor, *args:Tensor, dim:int=0) -> Tensor:
     """
@@ -3948,6 +3973,7 @@ class Tensor(SimpleMathTrait):
 
 def _metadata_wrapper(fn):
   def _wrapper(*args, **kwargs):
+    # print(f"{args=}, {kwargs=}, {fn=}")
     if _METADATA.get() is not None: return fn(*args, **kwargs)
 
     if TRACEMETA >= 2:

@@ -114,6 +114,9 @@ spec = PatternMatcher([
 
   # PTX LOAD/STORE
   (UPat((Ops.LOAD, Ops.STORE), src=(UPat(dtype=dtypes.int64),), allow_any_len=True), lambda: True),
+
+  # concatination of tensors
+  (UPat(Ops.CAT, name="x"), lambda x: all(x.dtype == y.dtype for y in x.src)),
 ])
 
 # *** this is the spec of a Kernel in UOp ***

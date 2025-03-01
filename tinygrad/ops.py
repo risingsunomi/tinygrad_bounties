@@ -523,6 +523,9 @@ class UOp(MathTrait, metaclass=UOpMetaClass):
   def shrink(self, arg:tuple[tuple[sint, sint], ...]): return self._mop(Ops.SHRINK, arg)
   def flip(self, arg:tuple[bool, ...]): return self._mop(Ops.FLIP, arg)
 
+  # *** uop manipulation ops ***
+  def cat(self, arg): return self._mop(Ops.CAT, arg)
+
   # *** uop Buffer stuff ***
 
   buffer_num = itertools.count(0)

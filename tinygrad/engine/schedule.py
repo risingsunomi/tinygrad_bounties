@@ -70,6 +70,9 @@ sym = symbolic_simple+PatternMatcher([
   (UPat(Ops.SINK, name="root"),
     lambda root: UOp(Ops.SINK, root.dtype, new_src, root.arg)
       if (new_src:=tuple(x for x in root.src if not x.is_realized and x.base.op not in {Ops.CONST, Ops.BIND})) != root.src else None),
+    
+  # concatination of tensors Ops.CAT
+  (UPat(Ops.CAT, name="x"), lambda x: x.arg)
 ])
 
 remove_movement_ops = merge_views+PatternMatcher([

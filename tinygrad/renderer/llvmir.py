@@ -137,6 +137,8 @@ class LLVMRenderer(Renderer):
 
     acc_to_assign: dict[UOp, UOp] = {}
     for u in uops:
+      if u.op is Ops.CAT:
+        print("Ops.CAT called in LLVMRenderer")
       if u.op is Ops.ASSIGN: # prealloc all assigns
         vc += 1
         r[u] = r[u.src[1]] = f"%assign{vc}"
