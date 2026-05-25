@@ -61,7 +61,27 @@ class RDNA3Ops(FastEnum):
     S_SWAPPC_B64 = auto(); S_RFE_B64 = auto(); S_RPE_B64 = auto()
     S_SENDMSG_RTN_B32 = auto(); S_SENDMSG_RTN_B64 = auto()
 
+    # ** SOPC - 2in 1 SCC - 32bit literal **
+    S_CMP_EQ_I32 = auto(); S_CMP_LG_I32 = auto(); S_CMP_GT_I32 = auto()
+    S_CMP_GE_I32 = auto(); S_CMP_LT_I32 = auto(); S_CMP_LE_I32 = auto()
+    S_CMP_EQ_U32 = auto(); S_CMP_LG_U32 = auto(); S_CMP_GT_U32 = auto()
+    S_CMP_GE_U32 = auto(); S_CMP_LT_U32 = auto(); S_CMP_LE_U32 = auto()
+    S_BITCMP0_B32 = auto(); S_BITCMP1_B32 = auto(); S_BITCMP0_B64 = auto()
+    S_BITCMP1_B64 = auto(); S_CMP_EQ_U64 = auto(); S_CMP_LG_U64 = auto()
 
     # ** SOPP - SIMM16 **
-    
+    S_NOP = auto(); S_SETKILL = auto(); S_SETHALT = auto(); S_SLEEP = auto()
+    S_SET_INST_PREFETCH_DISTANCE = auto(); S_CALUSE = auto(); S_DELAY_ALU = auto()
+    S_WAITCNT = auto(); S_WAIT_IDLE = auto(); S_WAIT_EVENT = auto()
+    S_TRAP = auto(); S_ROUND_MODE = auto(); S_DENORM_MODE = auto()
+    S_CODE_END = auto(); S_BRANCH = auto(); S_CBRANCH_SCC0 = auto()
+    S_CBRANCH_SCC1 = auto(); S_CBRANCH_VCCZ = auto(); S_CBRANCH_VCCNZ = auto()
+    S_CBRANCH_EXECZ = auto(); S_CBRANCH_EXECNZ = auto(); S_CBRANCH_CDBGSYS = auto()
+    S_CBRANCH_CDBGUSER = auto(); S_CBRANCH_CDBGSYS_OR_USER = auto()
+    S_CBRANCH_CDBGSYS_AND_USER = auto(); S_ENDPGM_ORDERED_PS_DONE = auto()
+    S_WAKEUP = auto(); S_SETPRIO = auto(); SET_SENDMSG = auto();
+    S_SENDMSGHALT = auto(); S_INCPERFLEVEL = auto(); S_DECREPERFLEVEL = auto();
+    S_ICACHE_INV = auto(); S_BARRIER = auto()
+
+
 
