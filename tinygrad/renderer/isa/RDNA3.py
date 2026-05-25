@@ -79,9 +79,17 @@ class RDNA3Ops(FastEnum):
     S_CBRANCH_EXECZ = auto(); S_CBRANCH_EXECNZ = auto(); S_CBRANCH_CDBGSYS = auto()
     S_CBRANCH_CDBGUSER = auto(); S_CBRANCH_CDBGSYS_OR_USER = auto()
     S_CBRANCH_CDBGSYS_AND_USER = auto(); S_ENDPGM_ORDERED_PS_DONE = auto()
-    S_WAKEUP = auto(); S_SETPRIO = auto(); SET_SENDMSG = auto();
-    S_SENDMSGHALT = auto(); S_INCPERFLEVEL = auto(); S_DECREPERFLEVEL = auto();
+    S_WAKEUP = auto(); S_SETPRIO = auto(); SET_SENDMSG = auto()
+    S_SENDMSGHALT = auto(); S_INCPERFLEVEL = auto(); S_DECREPERFLEVEL = auto()
     S_ICACHE_INV = auto(); S_BARRIER = auto()
 
+    # ** SMEM **
+    S_LOAD_B32 = auto(); S_LOAD_B64 = auto(); S_LOAD_B128 = auto()
+    S_LOAD_B256 = auto(); S_LOAD_B512 = auto()
+    S_BUFFER_LOAD_B32 = auto(); S_BUFFER_LOAD_B64 = auto()
+    S_BUFFER_LOAD_B128 = auto(); S_BUFFER_LOAD_B256 = auto()
+    S_BUFFER_LOAD_B512 = auto(); S_GL1_INV = auto()
+    S_DCACHE_INV = auto()
 
-
+    # ** VOP2 - 2in - 32b literal const, DDP instructions **
+    V_CNDMASK_B32 = auto(); V_DOT2ACC_F32_F16 = auto()
