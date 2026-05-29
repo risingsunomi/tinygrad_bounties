@@ -4,7 +4,7 @@ from tinygrad.uop.ops import UOp, UPat, PatternMatcher
 from tinygrad.renderer.isa import Register
 
 # ***** RDNA3 Ops *****
-# small endian
+
 class RDNA3Ops(FastEnum):
     # ** SOP2 - 2in - 1out - 32bit literals **
     S_ADD_U32 = auto(); S_SUB_U32 = auto(); S_ADD_I32 = auto()
@@ -86,3 +86,26 @@ SPECIAL_SGPR = (
   EXEC_LO, EXEC_HI, EXEC,
   SCC, M0, NULL, OFF, LIT,
 )
+
+# ***** RDNA3 legalization *****
+
+extra_matcher = PatternMatcher([
+  # bool CMPNE is XOR, bool CMPEQ is XOR+XOR, bool CMPLT is XOR+AND
+  # bool comparison lowering
+  (UPat.var('x', dtypes.bool).ne(UPat.var('y')), lambda x,y: x^y),
+  (UPat.var('x', dtypes.bool).alu(Ops.CMPEQ, UPat.var('y')), lambda x,y: (x^y)^True),
+  (UPat.var('x', dtypes.bool)<UPat.var('y'), lambda x,y: (x^True)&y),
+  # unsupported conversions
+  # float16 -> int32/unsigned int32
+  (UPat.var("y", dtypes.float16).cast(dtypes.int32s + dtypes.uint32s, name="x"),
+   lambda y,x: y.cast(dtypes.float32).cast(x.dtype)),
+  # int32/unsigned int32 -> float16
+  (UPat.var("x", dtypes.int32s + dtypes.uint32s).cast(dtypes.float16, name="y"),
+   lambda x,y: x.cast(dtypes.float32).cast(y.dtype)),
+  # from x86
+  # rewrite -x -> 0 - x
+  (UPat(Ops.NEG, name="x"), lambda x: UOp(Ops.SUB, x.dtype, (x.const_like(0),) + x.src)),
+  # rewrite modulo as dividend - divisor * quotient
+  (UPat(Ops.CMOD, src=(UPat.var("x"), UPat.var("y"))), lambda x,y: x - y * x.alu(Ops.CDIV, y)),
+
+])
