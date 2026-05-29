@@ -12,7 +12,8 @@ class RDNA3Ops(FastEnum):
     S_LSHL_B32 = auto(); S_LSHR_B32 = auto(); S_ASHR_I32 = auto()
 
     # ** SOP1 - 1in - 1out - 32bit literals **
-    S_MOV_B32 = auto(); S_MOV_B64 = auto(); S_CMOV_B32 = auto(); S_NOT_B32 = auto();
+    S_MOV_B32 = auto(); S_MOV_B64 = auto(); S_CMOV_B32 = auto(); S_NOT_B32 = auto()
+    S_AND_SAVEEXEC_B64 = auto(); S_OR_SAVEEXEC_B64 = auto(); S_XOR_SAVEEXEC_B64 = auto()
 
     # ** SOPC - 2in - 1out SCC - 32bit literals **
     S_CMP_EQ_I32 = auto(); S_CMP_LG_I32 = auto(); S_CMP_GT_I32 = auto()
@@ -23,6 +24,7 @@ class RDNA3Ops(FastEnum):
     # ** SOPP - 1in - control flow - SIMM16 **
     S_NOP = auto(); S_ENDPGM = auto(); S_WAITCNT = auto(); S_BARRIER = auto()
     S_BRANCH = auto(); S_CBRANCH_SCC0 = auto(); S_CBRANCH_SCC1 = auto()
+    S_CBRANCH_EXECZ = auto(); S_CBRANCH_EXECNZ = auto()
 
     # ** SMEM - memory in - SGPR out **
     S_LOAD_B32 = auto(); S_LOAD_B64 = auto(); S_LOAD_B128 = auto()
@@ -108,4 +110,19 @@ extra_matcher = PatternMatcher([
   # rewrite modulo as dividend - divisor * quotient
   (UPat(Ops.CMOD, src=(UPat.var("x"), UPat.var("y"))), lambda x,y: x - y * x.alu(Ops.CDIV, y)),
 
+])
+
+# ***** RDNA3 pre instruction selection *****
+pre_isel_matcher = PatternMatcher([
+  # noop of a noop is removed
+  (UPat(Ops.NOOP, src=(UPat(Ops.NOOP),), name="x"), lambda x: x.replace(src=x.src[0].src)),
+  # cast between signed and unsigned int is a noop
+  (UPat.var("y", dtypes.ints+(dtypes.bool,)).cast(dtypes.ints, name="x"),
+   lambda y,x: x.replace(op=Ops.NOOP) if x.dtype.itemsize == y.dtype.itemsize else None),
+  # same-size bitcasts are usually noops on VGPRs
+  (UPat.var("y").bitcast().named("x"),
+   lambda y,x: x.replace(op=Ops.NOOP) if x.dtype.itemsize == y.dtype.itemsize else None),
+  # raw bool where needs a compare so it can become VCC
+  (UPat.var("m", dtypes.bool).where(UPat.var("a"), UPat.var("b")),
+   lambda m,a,b: m.ne(0).where(a,b) if m.op not in GroupOp.Comparison and a.dtype.count == 1 else None),
 ])
