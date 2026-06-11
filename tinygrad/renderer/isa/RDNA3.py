@@ -1,7 +1,9 @@
-from tinygrad.dtype import dtypes
+from typing import Optional
+
+from tinygrad.dtype import dtypes, DType, truncate
 from tinygrad.uop import auto, FastEnum, GroupOp, Ops
 from tinygrad.uop.ops import UOp, UPat, PatternMatcher
-from tinygrad.renderer.isa import Register
+from tinygrad.renderer.isa import Register, IselContext
 
 # ***** RDNA3 Ops *****
 
@@ -61,6 +63,40 @@ class RDNA3Ops(FastEnum):
     GLOBAL_STORE_B16 = auto(); GLOBAL_STORE_B32 = auto(); GLOBAL_STORE_B64 = auto()
     GLOBAL_STORE_B96 = auto(); GLOBAL_STORE_B128 = auto()
 
+# ***** RDNA3 groups *****
+VALU_RESULT_OPS = {
+  RDNA3Ops.V_MOV_B32,
+  RDNA3Ops.V_MOV_B16,
+  RDNA3Ops.V_ADD_F32,
+  RDNA3Ops.V_SUB_F32,
+  RDNA3Ops.V_MUL_F32,
+  RDNA3Ops.V_ADD_NC_U32,
+  RDNA3Ops.V_SUB_NC_U32,
+  RDNA3Ops.GLOBAL_LOAD_B32,
+}
+
+SALU_RESULT_OPS = {
+  RDNA3Ops.S_MOV_B32,
+  RDNA3Ops.S_MOV_B64,
+  RDNA3Ops.S_ADD_U32,
+  RDNA3Ops.S_SUB_U32,
+  RDNA3Ops.S_LOAD_B32,
+}
+
+VCC_RESULT_OPS = {
+  RDNA3Ops.V_CMP_LT_F32,
+  RDNA3Ops.V_CMP_EQ_F32,
+  RDNA3Ops.V_CMP_NEQ_F32,
+  RDNA3Ops.V_CMP_LT_I32,
+  RDNA3Ops.V_CMP_EQ_I32,
+}
+
+NO_RESULT_OPS = {
+  RDNA3Ops.GLOBAL_STORE_B32,
+  RDNA3Ops.S_WAITCNT,
+  RDNA3Ops.S_BRANCH,
+  RDNA3Ops.S_ENDPGM,
+}
 # ***** RDNA3 registers *****
 
 SGPR = tuple(Register(f"s{i}", i) for i in range(106))
@@ -113,6 +149,7 @@ extra_matcher = PatternMatcher([
 ])
 
 # ***** RDNA3 pre instruction selection *****
+
 pre_isel_matcher = PatternMatcher([
   # noop of a noop is removed
   (UPat(Ops.NOOP, src=(UPat(Ops.NOOP),), name="x"), lambda x: x.replace(src=x.src[0].src)),
@@ -126,3 +163,74 @@ pre_isel_matcher = PatternMatcher([
   (UPat.var("m", dtypes.bool).where(UPat.var("a"), UPat.var("b")),
    lambda m,a,b: m.ne(0).where(a,b) if m.op not in GroupOp.Comparison and a.dtype.count == 1 else None),
 ])
+
+# ***** RDNA3 instruction selection *****
+
+# registry ops
+def def_reg(dt: DType, reg: Optional[Register]=None):
+    return UOp(Ops.DEFINE_VAR, dt, tag=None if reg is None else (reg,))
+
+# immediate constant
+def imm(dt: DType, value: int):
+    return UOp.const(dt, truncate[dt](value)).rtag()
+def to_imm(c:UOp) -> UOp|None:
+  if c.op is not Ops.CONST: return None
+  if c.dtype in dtypes.ints+(dtypes.bool,): return imm(c.dtype, c.arg)
+  return None
+
+# type mapping
+def rdna3_cmp_op(x:UOp) -> RDNA3Ops:
+  dt = x.src[0].dtype
+  if x.op is Ops.CMPEQ:
+    if dt is dtypes.float32: return RDNA3Ops.V_CMP_EQ_F32
+    if dt is dtypes.int32: return RDNA3Ops.V_CMP_EQ_I32
+    if dt is dtypes.uint32: return RDNA3Ops.V_CMP_EQ_U32
+  if x.op is Ops.CMPNE:
+    if dt is dtypes.float32: return RDNA3Ops.V_CMP_NEQ_F32
+    if dt is dtypes.int32: return RDNA3Ops.V_CMP_NE_I32
+    if dt is dtypes.uint32: return RDNA3Ops.V_CMP_NE_U32
+  if x.op is Ops.CMPLT:
+    if dt is dtypes.float32: return RDNA3Ops.V_CMP_LT_F32
+    if dt is dtypes.int32: return RDNA3Ops.V_CMP_LT_I32
+    if dt is dtypes.uint32: return RDNA3Ops.V_CMP_LT_U32
+  raise NotImplementedError(f"unsupported RDNA3 cmp {x.op} {dt}")
+
+# get addr
+# spgr pointer and vgpr byte offset
+def rdna3_addr(x:UOp) -> tuple[UOp, ...]:
+  def _offset(v:int): return imm(dtypes.int32, v)
+  if x.op is not Ops.INDEX: return (x, UOp(Ops.NOOP), _offset(0))
+  base, idx = x.src
+  itemsize = base.dtype.itemsize if isinstance(base.dtype, dtypes.Array) else 1
+  addr_offset = 0
+  if idx.op is Ops.ADD and idx.src[0].op is Ops.INDEX:
+    var_idx = idx.src[0]
+    const_idx = idx.src[1].arg
+    byte_offset = (var_idx if itemsize == 1 else var_idx * var_idx.const_like(itemsize))
+    const_bytes = const_idx * itemsize
+    if -4096 <= const_idx <= 4095:
+      addr_offset = const_bytes
+    else:
+      byte_offset = byte_offset + byte_offset.const_like(const_bytes)
+  else:
+    byte_offset = idx if itemsize == 1 else idx * idx.const_like(itemsize)
+
+  return (byte_offset, base, _offset(addr_offset))
+   
+def alloc_vregs(ctx:IselContext, x:UOp) -> UOp|None:
+  if x.op is Ops.DEFINE_REG and x.tag is not None:
+    return None
+  if x.dtype is dtypes.void: return None
+  if isinstance(x.tag, tuple) and x.tag[0]._cons: return None
+  if x.arg in NO_RESULT_OPS: return None
+
+  if x.arg in VALU_RESULT_OPS:
+    return x.replace(tag=ctx.vreg(ALLOC_VGPR))
+  if x.arg in SALU_RESULT_OPS:
+    return x.replace(tag=ctx.sreg(ALLOC_SGPR))
+  if x.arg in VCC_RESULT_OPS:
+    return x.replace(tag=(ctx.vreg(VCC),))
+  
+  raise NotImplementedError(
+    f"no RDNA3 destination register class for {x.arg}"
+  )
